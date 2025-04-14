@@ -1,10 +1,5 @@
 # Public Folder Explorer for WordPress
 
-[![Version](https://img.shields.io/wordpress/plugin/v/public-folder-explorer)](https://wordpress.org/plugins/public-folder-explorer/)
-[![Downloads](https://img.shields.io/wordpress/plugin/dt/public-folder-explorer)](https://wordpress.org/plugins/public-folder-explorer/)
-[![License](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
-[![Tested WP](https://img.shields.io/wordpress/v/public-folder-explorer)](https://wordpress.org/plugins/public-folder-explorer/)
-
 This WordPress plugin allows you to display a frontend file explorer for a designated public folder on your server. Visitors can browse through the folder structure and download publicly accessible files directly from your website.
 
 ## Features
@@ -47,13 +42,6 @@ This WordPress plugin allows you to display a frontend file explorer for a desig
     * **Frontend Title:** The title that will be displayed above the file explorer on the frontend.
 
 2.  **Display on Frontend:** To display the file explorer on any WordPress page or post, simply use the `[public_folder_explorer]` shortcode within the content editor.
-
-## Screenshots
-
-* **Admin Settings Page:** (Add a screenshot of your plugin's settings page here)
-* **Frontend File Explorer (List View):** (Add a screenshot of the frontend explorer in list view here)
-* **Frontend File Explorer (Grid View):** (Add a screenshot of the frontend explorer in grid view here)
-* **Frontend Search Results:** (Add a screenshot of the frontend search results here)
 
 ## Frequently Asked Questions (FAQ)
 
