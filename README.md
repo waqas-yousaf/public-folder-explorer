@@ -70,7 +70,7 @@ This plugin is released under the [GNU General Public License v2.0](https://www.
 
 ## Credits
 
-Developed by [Your Name/Company Name] ([Your Website/Author URI]).
+Developed by Waqas Yousaf (www.wishdd.com).
 
 ---
 
