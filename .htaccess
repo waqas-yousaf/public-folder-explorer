@@ -1,0 +1,5 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:X-Requested-With} XMLHttpRequest
+    RewriteRule ^admin-ajax\.php$ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization},L]
+</IfModule>

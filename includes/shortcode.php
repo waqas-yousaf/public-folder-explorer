@@ -6,7 +6,7 @@ function pfe_shortcode_callback($atts) {
     wp_enqueue_style('pfe-style');
     wp_enqueue_script('pfe-script');
 
-    // $base_dir = get_option('pfe_base_directory');
+    // $base_dir = get_option('pfe_base_dir');
     // $base_url = content_url('/public-files/');
 
     ob_start();

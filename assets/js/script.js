@@ -1,296 +1,284 @@
-jQuery(document).ready(function($) {
-    var currentPath = '';
-    var searchActive = false;
-    var currentLayout = 'list'; // Default layout
-    var savedLayout = localStorage.getItem('pfe_layout_preference');
-    if (savedLayout) {
-        currentLayout = savedLayout;
-        $('.pfe-layout-btn').removeClass('active');
-        $('.pfe-layout-btn[data-layout="' + currentLayout + '"]').addClass('active');
-        $('.pfe-file-list').addClass(currentLayout + '-view');
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    const fileList = document.querySelector('.pfe-file-list');
+    const searchResults = document.querySelector('.pfe-search-results');
+    const searchResultsList = document.querySelector('.pfe-search-results .pfe-results-list');
+    const searchInput = document.getElementById('pfe-search-input');
+    const searchButton = document.getElementById('pfe-search-button');
+    const breadcrumb = document.querySelector('.pfe-breadcrumb');
+    const layoutButtons = document.querySelectorAll('.pfe-layout-btn');
 
-    $(document).on('click', '.pfe-layout-btn', function() {
-        $('.pfe-layout-btn').removeClass('active');
-        $(this).addClass('active');
-        currentLayout = $(this).data('layout');
-        $('.pfe-file-list').removeClass('list-view grid-view').addClass(currentLayout + '-view');
+    let currentPath = '';
+    let searchActive = false;
+    let currentLayout = localStorage.getItem('pfe_layout_preference') || 'list';
+    let searchTimeout;
 
-        // Store preference in localStorage
-        localStorage.setItem('pfe_layout_preference', currentLayout);
+    // Initialize layout
+    layoutButtons.forEach(button => {
+        button.classList.remove('active');
+        if (button.dataset.layout === currentLayout) {
+            button.classList.add('active');
+        }
     });
+    fileList.classList.add(`${currentLayout}-view`);
 
+    // Layout change handler
+    layoutButtons.forEach(button => {
+        button.addEventListener('click', function () {
+            const layout = this.dataset.layout;
+            if (layout !== currentLayout) {
+                layoutButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                fileList.classList.remove('list-view', 'grid-view');
+                fileList.classList.add(`${layout}-view`);
+                localStorage.setItem('pfe_layout_preference', layout);
+                currentLayout = layout;
+            }
+        });
+    });
 
     // Load initial directory
     loadDirectory('');
-    // Handle file item clicks
-    $(document).on('click', '.pfe-go-up-item', function() {
-        var path = $(this).data('path');
-        currentPath = path; // Update currentPath immediately
-        loadDirectory(path);
-    });
-    // Handle folder clicks
-    $(document).on('click', '.pfe-folder-item', function() {
-        var path = $(this).data('path');
-        currentPath = path; // Update currentPath immediately
-        loadDirectory(path);
+
+    // Directory navigation handlers (event delegation)
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('.pfe-go-up-item') || event.target.closest('.pfe-folder-item') || event.target.closest('.pfe-breadcrumb-item')) {
+            const target = event.target.closest('[data-path]');
+            if (target) {
+                const path = target.dataset.path;
+                currentPath = path;
+                loadDirectory(path);
+                if (searchActive) {
+                    searchResults.style.display = 'none';
+                    fileList.style.display = '';
+                    searchActive = false;
+                }
+            }
+        }
     });
 
-    // Handle breadcrumb clicks
-    $(document).on('click', '.pfe-breadcrumb-item', function() {
-        var path = $(this).data('path');
-        loadDirectory(path);
+    // Search input handler (debounced)
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        const searchTerm = searchInput.value.trim();
+        searchTimeout = setTimeout(() => {
+            if (searchTerm.length > 0) {
+                searchFiles(searchTerm);
+            } else if (searchActive) {
+                searchResults.style.display = 'none';
+                fileList.style.display = '';
+                searchActive = false;
+                updateBreadcrumb(currentPath);
+            }
+        }, 250);
     });
 
-    // Handle search button click
-    $('#pfe-search-button').click(function() {
-        var searchTerm = $('#pfe-search-input').val().trim();
+    // Search button click handler
+    searchButton.addEventListener('click', () => {
+        clearTimeout(searchTimeout);
+        const searchTerm = searchInput.value.trim();
         if (searchTerm.length > 0) {
             searchFiles(searchTerm);
         }
     });
 
-    // Handle Enter key in search input
-    $('#pfe-search-input').keypress(function(e) {
-        if (e.which == 13) {
-            var searchTerm = $(this).val().trim();
-            if (searchTerm.length > 0) {
-                searchFiles(searchTerm);
-            }
+    // Back to browse handler
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('.pfe-back-to-browse')) {
+            searchResults.style.display = 'none';
+            fileList.style.display = '';
+            searchActive = false;
+            updateBreadcrumb(currentPath);
         }
-    });
-
-    // Handle back to browse button
-    $(document).on('click', '.pfe-back-to-browse', function() {
-        $('.pfe-search-results').hide();
-        $('.pfe-file-list').show();
-        searchActive = false;
-        updateBreadcrumb(currentPath);
     });
 
     function loadDirectory(path) {
-        currentPath = path;
-        $('.pfe-file-list').html('<div class="pfe-loading">Loading...</div>');
-
-        $.ajax({
-            url: pfe_ajax.ajax_url,
-            type: 'POST',
-            data: {
+        fetch(pfe_ajax.ajax_url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
                 action: 'pfe_browse_folder',
                 path: path,
                 nonce: pfe_ajax.nonce
-            },
-            success: function(response) {
-                if (response.success) {
-                    renderDirectory(response.data);
-                    updateBreadcrumb(path);
-                } else {
-                    $('.pfe-file-list').html('<div class="pfe-error">' + response.data + '</div>');
-                }
-            },
-            error: function() {
-                $('.pfe-file-list').html('<div class="pfe-error">Error loading directory.</div>');
+            })
+        })
+        .then(response => response.json())
+        .then(response => {
+            if (response.success) {
+                renderDirectory(response.data);
+                updateBreadcrumb(path);
+            } else {
+                console.error('Server Error:', response.data);
+                fileList.innerHTML = `<div class="pfe-error">${response.data}</div>`;
             }
+        })
+        .catch(error => {
+            console.error('Fetch Error:', error);
+            fileList.innerHTML = `<div class="pfe-error">Error loading directory.</div>`;
         });
     }
 
-/**
- * Renders the directory view by populating the file list with folders and files.
- *
- * @param {Array} items - Array of items to render, each item is an object containing
- *                        properties such as 'type', 'path', 'name', 'modified', 'size', and 'url'.
- *
- * If the directory is empty and at the root, a message is displayed indicating that the folder
- * is empty. If not in the root directory, a "Go Up" button is added to navigate to the parent
- * directory. Items are sorted to display folders first, followed by files. Each item is rendered
- * with relevant details and a download button for files.
- */
-
     function renderDirectory(items) {
         if (items.length === 0 && currentPath === '') {
-            $('.pfe-file-list').html('<div class="pfe-empty">This folder is empty</div>');
+            fileList.innerHTML = '<div class="pfe-empty">This folder is empty</div>';
             return;
         }
 
-        var html = '';
-
-        // Add "Go Up" button if not in root
+        let html = '';
         if (currentPath !== '') {
-            var parentPath = currentPath.split('/').slice(0, -1).join('/');
+            const parentPath = currentPath.split('/').slice(0, -1).join('/');
             html += `
-            <div class="pfe-go-up-item" data-path="${parentPath}">
-                <span class="pfe-go-up-icon dashicons dashicons-arrow-up-alt"></span>
-                <div class="pfe-item-content">
-                    <span class="pfe-go-up-text">Go Up</span>
+                <div class="pfe-go-up-item" data-path="${parentPath}">
+                    <span class="pfe-go-up-icon dashicons dashicons-arrow-up-alt"></span>
+                    <div class="pfe-item-content">
+                        <span class="pfe-go-up-text">Go Up</span>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
         }
 
-        // Sort folders first, then files
-        items.sort(function(a, b) {
+        items.sort((a, b) => {
             if (a.type === 'folder' && b.type !== 'folder') return -1;
             if (a.type !== 'folder' && b.type === 'folder') return 1;
             return a.name.localeCompare(b.name);
         });
 
-        items.forEach(function(item) {
-            if (item.type === 'folder') {
-                html += `
-                <div class="pfe-folder-item" data-path="${item.path}">
-                    <span class="pfe-folder-icon dashicons dashicons-category"></span>
+        items.forEach(item => {
+            const iconClass = item.type === 'folder' ? 'dashicons-category' : 'dashicons-media-default';
+            const itemClass = item.type === 'folder' ? 'pfe-folder-item' : 'pfe-file-item';
+            const dataPath = item.type === 'folder' ? `data-path="${item.path}"` : '';
+            const actions = item.type === 'file' ? `
+                <div class="pfe-file-actions">
+                    <a href="${item.url}" target="_blank" class="pfe-preview-button" title="Preview">Preview</a>
+                    <a href="${item.url}" download class="pfe-download-button" title="Download">Download</a>
+                </div>
+            ` : '';
+            const info = item.type === 'file' ? `
+                <span class="pfe-file-size">${item.size}</span>
+            ` : '';
+
+            html += `
+                <div class="${itemClass}" ${dataPath}>
+                    <span class="pfe-item-icon dashicons ${iconClass}"></span>
                     <div class="pfe-item-content">
                         <span class="pfe-file-name">${item.name}</span>
                     </div>
                     <div class="pfe-file-info">
+                        ${info}
                         <span class="pfe-file-modified">${item.modified}</span>
+                        ${actions}
                     </div>
                 </div>
             `;
-            } else {
-                html += `
-                <div class="pfe-file-item">
-                    <span class="pfe-file-icon dashicons dashicons-media-default"></span>
-                    <div class="pfe-item-content">
-                        <span class="pfe-file-name">${item.name}</span>
-                    </div>
-                    <div class="pfe-file-info">
-                        <span class="pfe-file-size">${item.size}</span>
-                        <span class="pfe-file-modified">${item.modified}</span>
-                        <div class="pfe-file-actions">
-                            <a href="${item.url}" target="_blank" class="pfe-preview-button" title="Preview">
-                                Preview
-                            </a>
-                            <a href="${item.url}" download class="pfe-download-button" title="Download">
-                             Download
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            `;
-            }
         });
 
-        $('.pfe-file-list').html(html);
+        fileList.innerHTML = html;
     }
 
     function updateBreadcrumb(path) {
         if (searchActive) return;
-
-        var parts = path.split('/').filter(Boolean);
-        var breadcrumbHtml = '<span class="pfe-breadcrumb-item" data-path="">Root</span>';
-
-        if (parts.length > 0) {
-            var currentPath = '';
-            parts.forEach(function(part, index) {
-                currentPath += (currentPath ? '/' : '') + part;
-                breadcrumbHtml += `<span class="pfe-breadcrumb-item" data-path="${currentPath}">${part}</span>`;
-            });
-        }
-
-        $('.pfe-breadcrumb').html(breadcrumbHtml);
+        const parts = path.split('/').filter(Boolean);
+        let breadcrumbHtml = '<span class="pfe-breadcrumb-item" data-path="">Root</span>';
+        let currentPath = '';
+        parts.forEach(part => {
+            currentPath += (currentPath ? '/' : '') + part;
+            breadcrumbHtml += `<span class="pfe-breadcrumb-item" data-path="${currentPath}">${part}</span>`;
+        });
+        breadcrumb.innerHTML = breadcrumbHtml;
     }
 
-// Update the searchFiles function
-function searchFiles(term) {
-    var searchFromPath = currentPath;
+    function searchFiles(term) {
+        fileList.style.display = 'none';
+        searchResults.style.display = '';
+        searchResultsList.innerHTML = '<div class="pfe-loading">Searching...</div>';
+        searchActive = true;
 
-
-    $('.pfe-file-list').hide();
-    $('.pfe-search-results .pfe-results-list').html('<div class="pfe-loading">Searching...></div>');
-
-    // Update search results header with breadcrumb
-    $('.pfe-search-results .pfe-results-header').html(`
-        <div class="pfe-search-breadcrumb">
-            <span class="pfe-search-location">
-                Search results in:
-                ${searchFromPath ? searchFromPath : 'Home'}
-            </span>
-            <button class="pfe-back-to-browse" data-path="${searchFromPath}">
-                Back to Browsing
-            </button>
-        </div>
-        <h3>Search Results</h3>
-    `);
-
-    $('.pfe-search-results').show();
-    searchActive = true;
-
-    $.ajax({
-        url: pfe_ajax.ajax_url,
-        type: 'POST',
-        data: {
-            action: 'pfe_search_files',
-            search: term,
-            include_folders: true, // Add this parameter
-            nonce: pfe_ajax.nonce
-        },
-        success: function(response) {
+        fetch(pfe_ajax.ajax_url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                action: 'pfe_search_files',
+                search: term,
+                path: currentPath,
+                nonce: pfe_ajax.nonce,
+                include_folders: true
+            })
+        })
+        .then(response => response.json())
+        .then(response => {
             if (response.success) {
                 renderSearchResults(response.data, term);
             } else {
-                $('.pfe-search-results .pfe-results-list').html('<div class="pfe-error">' + response.data + '</div>');
+                searchResultsList.innerHTML = `<div class="pfe-error">${response.data}</div>`;
             }
-        },
-        error: function() {
-            $('.pfe-search-results .pfe-results-list').html('<div class="pfe-error">Error searching files.</div>');
-        }
-    });
-}
-
-// Update renderSearchResults to handle folders
-function renderSearchResults(items, term) {
-    if (items.length === 0) {
-        $('.pfe-search-results .pfe-results-list').html(
-            `<div class="pfe-empty">No items found for "${term}"</div>`
-        );
-        return;
+        })
+        .catch(error => {
+            const errorMsg = error.responseJSON?.data || 'Search failed';
+            searchResultsList.innerHTML = `<div class="pfe-error">${errorMsg}</div>`;
+        });
     }
 
-    var html = `<div class="pfe-search-summary">Found ${items.length} items matching "${term}"</div>`;
+    function renderSearchResults(items, term) {
+        if (items.length === 0) {
+            searchResultsList.innerHTML = `<div class="pfe-empty">No items found for "${term}"</div>`;
+            return;
+        }
 
-    items.forEach(function(item) {
-        var folderPath = item.path.split('/').slice(0, -1).join(' / ');
-
-        if (item.type === 'folder') {
-            html += `
-                <div class="pfe-folder-item" data-path="${item.path}">
-                    <span class="pfe-folder-icon dashicons dashicons-category"></span>
-                    <div class="pfe-item-content">
-                        <div class="pfe-file-name">${item.name}</div>
-                        <div class="pfe-file-folder">${folderPath || 'Root'}</div>
-                    </div>
-                    <div class="pfe-file-modified">${item.modified}</div>
+        let html = `<div class="pfe-search-summary">Found ${items.length} items matching "${term}"</div>`;
+        items.forEach(item => {
+            const folderPath = item.path.split('/').slice(0, -1).join(' / ') || 'Root';
+            const iconClass = item.type === 'folder' ? 'dashicons-category' : 'dashicons-media-default';
+            const itemClass = item.type === 'folder' ? 'pfe-folder-item' : 'pfe-file-item';
+            const dataPath = `data-path="${item.path}"`;
+            const actions = item.type === 'file' ? `
+                <div class="pfe-file-actions">
+                    <a href="${item.url}" target="_blank" class="pfe-preview-button" title="Preview">Preview</a>
+                    <a href="${item.url}" download class="pfe-download-button" title="Download">Download</a>
                 </div>
-            `;
-        } else {
+            ` : '';
+            const sizeInfo = item.type === 'file' ? `<span class="pfe-file-size">${item.size}</span>` : '';
+
             html += `
-                <div class="pfe-file-item">
-                    <span class="pfe-file-icon dashicons dashicons-media-default"></span>
+                <div class="${itemClass} pfe-search-result-item" ${dataPath}>
+                    <span class="pfe-item-icon dashicons ${iconClass}"></span>
                     <div class="pfe-item-content">
                         <div class="pfe-file-name">${item.name}</div>
-                        <div class="pfe-file-folder">${folderPath || 'Root'}</div>
+                        <div class="pfe-file-folder">${folderPath}</div>
                     </div>
                     <div class="pfe-file-info">
-                        <span class="pfe-file-size">${item.size}</span>
+                        ${sizeInfo}
                         <span class="pfe-file-modified">${item.modified}</span>
-                          <div class="pfe-file-actions">
-                        <a href="${item.url}" target="_blank" class="pfe-preview-button" title="Preview">
-                            Preview
-                        </a>
-                        <a href="${item.url}" download class="pfe-download-button" title="Download">
-                            Download
-                        </a>
+                        ${actions}
                     </div>
-                    </div>
-
                 </div>
             `;
-        }
-    });
+        });
+        searchResultsList.innerHTML = html;
+    }
 
-    $('.pfe-search-results .pfe-results-list').html(html);
-}
-
-
+    // Nonce refresh mechanism (example - call if a request fails with a nonce error)
+    // function pfe_refresh_nonce() {
+    //     fetch(pfe_ajax.ajax_url, {
+    //         method: 'POST',
+    //         headers: {
+    //             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+    //         },
+    //         body: new URLSearchParams({
+    //             action: 'pfe_refresh_nonce'
+    //         })
+    //     })
+    //     .then(response => response.json())
+    //     .then(response => {
+    //         if (response.success) {
+    //             pfe_ajax.nonce = response.data.nonce;
+    //             // Optionally, retry the last failed request
+    //         }
+    //     })
+    //     .catch(error => console.error('Error refreshing nonce:', error));
+    // }
 });
